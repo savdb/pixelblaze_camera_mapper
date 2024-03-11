@@ -8,10 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 opencv-python = "^4.9.0.80"
-py-mini-racer = "^0.6.0"
-pytz = "^2024.1"
-websocket-client = "^1.7.0"
-requests = "^2.31.0"
+pixelblaze-client = {git = "https://github.com/savdb/pixelblaze-client.git"}
 
 
 [build-system]
