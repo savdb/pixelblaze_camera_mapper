@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "pixelblaze-camera-mapper"
+version = "0.1.0"
+description = "Creates a pixelmap in pixelblaze using the camera"
+authors = ["Sarah van der Bleek <sarah@vanderbleek.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+opencv-python = "^4.9.0.80"
+py-mini-racer = "^0.6.0"
+pytz = "^2024.1"
+websocket-client = "^1.7.0"
+requests = "^2.31.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
