@@ -40,7 +40,7 @@ def run_mapping_task(threshold, pb, num_leds, brightness):
             frame, threshold, save_image=True, minimum_dimension=0
         )
 
-        #print("Found LED at ", location)
+        # print("Found LED at ", location)
         locations.append(location)
 
     print("Finishing LED location capture")
@@ -63,24 +63,22 @@ def main():
 
     pb.setActivePatternByName("pixel index")
     locations = run_mapping_task(threshold, pb, num_pixels, brightness)
-    # print("Found pixels at:")
-    # print(locations)
 
     pixelmap = ignore_empty_pixels(locations)
     print("Pixelblaze map coordinates generated: ")
     print(pixelmap)
 
+    print("Setting coordinates as pixel map")
+    pb.setMapCoordinates(pixelmap)
+    pb.wsSendJson({"mapperFit": 0})
+
+    pb.setActivePatternByName("Half and Half with missing pixels")
+    pb.setBrightnessSlider(original_brightness)
+
     print("Saving generated data to out/ folder")
     camera.generate_output_image(CAMERA_ID, locations, "pixelmap")
     with open("out/pixelmap.json", "w", encoding="utf8") as outfile:
         json.dump(pixelmap, outfile)
-
-    print("Setting coordinates as pixel map")
-    pb.setMapCoordinates(pixelmap)
-    pb.wsSendJson({"mapperFit":0})
-
-    pb.setActivePatternByName("Half and Half with missing pixels")
-    pb.setBrightnessSlider(original_brightness)
 
 
 if __name__ == "__main__":
