@@ -1,3 +1,5 @@
 /.venv
 /out
 /tests
+**/__pycache__/ 
+poetry.lock

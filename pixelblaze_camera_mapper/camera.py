@@ -66,6 +66,7 @@ def launch_calibration_window(camera_id, pb):
     vc.release()
     return brightness, threshold
 
+
 def overlay_text(image):
     image = cv.cvtColor(image, cv.COLOR_GRAY2RGB)
     return cv.putText(
