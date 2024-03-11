@@ -1429,7 +1429,32 @@ class Pixelblaze:
         """
         return self.getFile("/pixelmap.txt")
 
-    def setMapCoordinates(self, mapCoordinates, mapFunction=None) -> bool:
+    def setMapCoordinates(self, mapCoordinates:list) -> bool:
+        mapData = self.createMapData(mapCoordinates)
+        mapFunction = str(mapCoordinates)
+        self.putFile('/pixelmap.txt', mapFunction)
+        self.putFile('/pixelmap.dat', mapData)
+        return self.setMapData(mapData)
+
+    def setMapFunction(self, mapFunction:str) -> bool:
+        """Sets the mapFunction text used to populate the Mapper tab in the Pixelblaze UI.
+        
+        Note that setting the map function also compiles and updates the mapData used by the Pixelblaze.
+
+        Args:
+            mapFunction (str): The text of the mapFunction.
+
+        Returns:
+            bool: True if the function text was successfully saved; otherwise False.
+        """
+        # Call the mapping function and get the pixelmap.
+        mapCoordinates = MiniRacer().call(mapFunction, self.getPixelCount())
+        mapData = self.createMapData(mapCoordinates)
+        self.putFile('/pixelmap.txt', mapFunction)
+        self.putFile('/pixelmap.dat', mapData)
+        return self.setMapData(mapData)
+        
+    def createMapData(self, mapCoordinates:list) -> bytes:
         numPixels = len(mapCoordinates)
         numDimensions = len(mapCoordinates[0])
 
@@ -1452,28 +1477,7 @@ class Pixelblaze:
                 # Rescale the elements appropriately.
                 value = int(maxInt * ((mapCoordinates[pixel][dimension] - minValue[dimension]) / (maxValue[dimension] - minValue[dimension])))
                 mapData += int.to_bytes(value, int(formatVersion), 'little', signed=False)
-
-        # Save the results to the Pixelblaze.
-        if(mapFunction == None):
-            mapFunction = str(mapCoordinates)
-        self.putFile('/pixelmap.txt', mapFunction)
-        return self.putFile('/pixelmap.dat', mapData)
-
-    def setMapFunction(self, mapFunction:str) -> bool:
-        """Sets the mapFunction text used to populate the Mapper tab in the Pixelblaze UI.
-        
-        Note that setting the map function also compiles and updates the mapData used by the Pixelblaze.
-
-        Args:
-            mapFunction (str): The text of the mapFunction.
-
-        Returns:
-            bool: True if the function text was successfully saved; otherwise False.
-        """
-        # Call the mapping function and get the pixelmap.
-        mapCoordinates = MiniRacer().call(mapFunction, self.getPixelCount())
-        self.setMapCoordinates(self, mapCoordinates, mapFunction)
-        
+        return mapData
 
     def getMapData(self) -> bytes:
         """Gets the binary representation of the pixelMap entered on the 'Mapper' tab.
