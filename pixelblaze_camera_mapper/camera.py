@@ -28,7 +28,7 @@ def open_camera(camera_id):
     return vc
 
 
-def launch_calibration_window(camera_id, pb):
+def launch_calibration_window(camera_id, pb, find_multiple_pixels=False):
     window_name = "Camera Calibration"
     cv.namedWindow(window_name)
     cv.createTrackbar("Threshold", window_name, 230, 255, do_nothing)
@@ -51,7 +51,13 @@ def launch_calibration_window(camera_id, pb):
         brightness = float(cv.getTrackbarPos("LED_Brightness", window_name) / 100)
         threshold = cv.getTrackbarPos("Threshold", window_name)
 
-        _, contour_image, gray_image = get_led_position(frame, threshold)
+        contour_image = None
+        gray_image = None
+        if find_multiple_pixels:
+            _, contour_image, gray_image = get_all_led_positions(frame, threshold)
+        else:
+            _, contour_image, gray_image = get_led_position(frame, threshold)
+
         gray_image = overlay_text(gray_image)
         cv.imshow(window_name, gray_image)
         cv.imshow("Detected LED", contour_image)
@@ -64,7 +70,7 @@ def launch_calibration_window(camera_id, pb):
     print("Destroying calibration windows")
     cv.destroyAllWindows()
     vc.release()
-    return brightness, threshold
+    return threshold
 
 
 def overlay_text(image):
@@ -111,6 +117,29 @@ def locate_led_in_image(threshold_image, minimum_dimension=3):
     return [-1, -1], edged_image  # Nothing found in this image
 
 
+def locate_all_leds_in_image(threshold_image, minimum_dimension=3):
+    minimum_dimension = 3
+
+    edged_image = threshold_image.copy()
+    contours, _ = cv.findContours(edged_image, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    if not len(contours) > 0:
+        return [], edged_image
+
+    contour_image = cv.cvtColor(threshold_image, cv.COLOR_GRAY2RGB)
+    contour_points = []
+    for contour in contours:
+        x, y, w, h = cv.boundingRect(contour)
+        if w >= minimum_dimension and h >= minimum_dimension:
+            cx = int(x + (w / 2))
+            cy = int(y + (h / 2))
+            cv.circle(contour_image, (cx, cy), 5, (0, 0, 255), 2)
+
+            contour_points.append([cx, cy])
+
+    # contour_image = cv.drawContours(contour_image, contours, -1, (255,0,0), 3)
+    return contour_points, contour_image
+
+
 def get_led_position(frame, threshold, save_image=False, minimum_dimension=3):
     gray_image = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     threshold_image = create_threshold(gray_image, threshold)
@@ -123,6 +152,20 @@ def get_led_position(frame, threshold, save_image=False, minimum_dimension=3):
     return location, contour_image, gray_image
 
 
+def get_all_led_positions(frame, threshold, save_image=False, minimum_dimension=3):
+    gray_image = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+    threshold_image = create_threshold(gray_image, threshold)
+    locations, contour_image = locate_all_leds_in_image(
+        threshold_image, minimum_dimension
+    )
+    if save_image:
+        global FRAMES_SAVED_COUNTER
+        cv.imwrite("out/led" + str(FRAMES_SAVED_COUNTER) + ".png", contour_image)
+        FRAMES_SAVED_COUNTER += 1
+
+    return locations, contour_image, gray_image
+
+
 def draw_all_led_positions(locations, image):
     print("Drawing locations on image")
 
@@ -131,6 +174,7 @@ def draw_all_led_positions(locations, image):
     image = cv.cvtColor(image, cv.COLOR_GRAY2RGB)
 
     for led_index, coordinates in enumerate(locations):
+        coordinates = [coordinates[0], coordinates[1]]
         image = cv.circle(image, coordinates, radius=5, color=(255, 0, 0), thickness=2)
         image = cv.putText(
             image,
