@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import os
 from functools import partial
+
 import cv2 as cv
 
-FRAMES_SAVED_COUNTER = 0
+import mapping
 
 
 def do_nothing(_):
@@ -15,7 +16,7 @@ def do_nothing(_):
 def change_brightness(brightness_value, pb=None):
     # print("Setting brightness to "+str(brightness_value)+"%")
     brightness_value = float(brightness_value / 100)
-    pb.setBrightnessSlider(brightness_value)
+    mapping.set_brightness(pb, brightness_value)
 
 
 def open_camera(camera_id):
@@ -28,7 +29,9 @@ def open_camera(camera_id):
     return vc
 
 
-def launch_calibration_window(camera_id, pb, find_multiple_pixels=False):
+def launch_calibration_window(
+    camera_id, pb, find_multiple_pixels=False, subtract_background=False
+):
     window_name = "Camera Calibration"
     cv.namedWindow(window_name)
     cv.createTrackbar("Threshold", window_name, 230, 255, do_nothing)
@@ -39,8 +42,14 @@ def launch_calibration_window(camera_id, pb, find_multiple_pixels=False):
     vc = open_camera(camera_id)
     print("Calibration window is opened")
 
+    if subtract_background:
+        mapping.all_pixels_off(pb)
+    else:
+        mapping.show_calibration_pixels(pb, find_multiple_pixels)
+
     threshold = 230
-    brightness = 50
+    background_image_found = False
+    background_image = None
 
     while True:
         success, frame = vc.read()
@@ -48,15 +57,20 @@ def launch_calibration_window(camera_id, pb, find_multiple_pixels=False):
             print("Couldn't get frame, exiting")
             break
 
-        brightness = float(cv.getTrackbarPos("LED_Brightness", window_name) / 100)
+        if subtract_background and not background_image_found:
+            background_image = frame.copy()
+            mapping.show_calibration_pixels(pb, find_multiple_pixels)
+            background_image_found = True
+
+        if subtract_background:
+            frame_without_background = cv.absdiff(background_image, frame)
+            frame = frame_without_background
+
         threshold = cv.getTrackbarPos("Threshold", window_name)
 
-        contour_image = None
-        gray_image = None
-        if find_multiple_pixels:
-            _, contour_image, gray_image = get_all_led_positions(frame, threshold)
-        else:
-            _, contour_image, gray_image = get_led_position(frame, threshold)
+        _, contour_image, gray_image = get_led_positions(
+            frame, threshold, find_multiple_leds=find_multiple_pixels
+        )
 
         gray_image = overlay_text(gray_image)
         cv.imshow(window_name, gray_image)
@@ -70,7 +84,7 @@ def launch_calibration_window(camera_id, pb, find_multiple_pixels=False):
     print("Destroying calibration windows")
     cv.destroyAllWindows()
     vc.release()
-    return threshold
+    return threshold, background_image
 
 
 def overlay_text(image):
@@ -140,28 +154,31 @@ def locate_all_leds_in_image(threshold_image, minimum_dimension=3):
     return contour_points, contour_image
 
 
-def get_led_position(frame, threshold, save_image=False, minimum_dimension=3):
+def get_led_positions(
+    frame,
+    threshold,
+    find_multiple_leds=False,
+    save_image=False,
+    minimum_dimension=3,
+    frame_number=0,
+):
     gray_image = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     threshold_image = create_threshold(gray_image, threshold)
-    location, contour_image = locate_led_in_image(threshold_image, minimum_dimension)
+
+    locations = None
+    contour_image = None
+
+    if find_multiple_leds:
+        locations, contour_image = locate_all_leds_in_image(
+            threshold_image, minimum_dimension
+        )
+    else:
+        locations, contour_image = locate_led_in_image(
+            threshold_image, minimum_dimension
+        )
+
     if save_image:
-        global FRAMES_SAVED_COUNTER
-        cv.imwrite("out/led" + str(FRAMES_SAVED_COUNTER) + ".png", contour_image)
-        FRAMES_SAVED_COUNTER += 1
-
-    return location, contour_image, gray_image
-
-
-def get_all_led_positions(frame, threshold, save_image=False, minimum_dimension=3):
-    gray_image = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-    threshold_image = create_threshold(gray_image, threshold)
-    locations, contour_image = locate_all_leds_in_image(
-        threshold_image, minimum_dimension
-    )
-    if save_image:
-        global FRAMES_SAVED_COUNTER
-        cv.imwrite("out/led" + str(FRAMES_SAVED_COUNTER) + ".png", contour_image)
-        FRAMES_SAVED_COUNTER += 1
+        cv.imwrite("out/led" + str(frame_number) + ".png", contour_image)
 
     return locations, contour_image, gray_image
 
@@ -188,12 +205,17 @@ def draw_all_led_positions(locations, image):
     return image
 
 
-def get_frame(vc):
+def get_frame(vc, background_image=None):
     success, frame = vc.read()
     if not success:
         print("Couldn't get frame, exiting")
         return None
     # frame = cv.resize(frame, dsize=(75,75), interpolation=cv.INTER_CUBIC)
+
+    if background_image is not None:
+        frame_without_background = cv.absdiff(background_image, frame)
+        frame = frame_without_background
+
     return frame
 
 

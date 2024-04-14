@@ -12,10 +12,10 @@ This program was written to run on a computer with a webcam pointing at the LEDs
 
 ## Setup steps on your computer
 
-1. Set your Pixelblaze IP address at the top of `mapping.py`
+1. Set your Pixelblaze IP address at the top of `config.py`
 2. Install dependencies listed in `pyproject.toml`. You can use [poetry](https://python-poetry.org/) to do this or install them yourself.
 3. In python, run `mapping.py`.
-4. The Camera calibration screen will open. If openCV is using a different camera than the one you expect, kill the program and choose a different camera id at the top of `mapping.py` until you see the correct one.
+4. The Camera calibration screen will open. If openCV is using a different camera than the one you expect, kill the program and choose a different camera id at the top of `config.py` until you see the correct one.
 
 ## Running the mapping program
 

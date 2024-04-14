@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import time
 import json
-from pixelblaze import *
-from pixelblaze_camera_mapper import camera
+import sys
 
+import pixelblaze
 
-PIXELBLAZE_IP = "192.168.2.73"
-CAMERA_ID = 0
+import config
+import camera
 
 
 def ignore_empty_pixels(positions):
@@ -21,10 +21,16 @@ def ignore_empty_pixels(positions):
     return positions_3d
 
 
-def set_binary_pattern(num_leds, num_bits, bit_sequence_index):
-    pixel_array = [0] * num_leds
+def set_brightness(pb, brightness):
+    if brightness > 1:
+        brightness = float(brightness / 100)
+    pb.setBrightnessSlider(brightness)
 
-    for i in range(num_leds):
+
+def set_binary_pattern(num_bits, bit_sequence_index):
+    pixel_array = [0] * config.NUM_LEDS
+
+    for i in range(config.NUM_LEDS):
         binary_number_string = bin(i)[2:].zfill(num_bits)
         bit_at_index = binary_number_string[num_bits - 1 - bit_sequence_index]
         pixel_array[i] = bit_at_index
@@ -32,61 +38,82 @@ def set_binary_pattern(num_leds, num_bits, bit_sequence_index):
     return pixel_array
 
 
-def run_binary_mapping_task(threshold, pb, num_leds):
+def show_calibration_pixels(pb, capture_multiple_pixels):
+    if capture_multiple_pixels:
+        print("Lighting calibration pixels")
+        pb.setActivePatternByName("binary mapping")
+        calibration_array = [1, 0] * (int)(config.NUM_LEDS / 2)
+        pb.setActiveVariables({"pixels_to_light": calibration_array})
+    else:
+        print("Blinking calibration pixel")
+        pb.setActivePatternByName("blink pixel")
+        pb.setActiveVariables({"pixel_to_light": 1})
+
+
+def all_pixels_off(pb):
+    pb.setActivePatternByName("pixel index")
+    pb.setActiveVariables({"pixel_to_light": -1})
+
+
+def map_pixels_binary(pb):
+    threshold, background_image = camera.launch_calibration_window(
+        config.CAMERA_ID,
+        pb,
+        find_multiple_pixels=True,
+        subtract_background=config.SUBTRACT_BACKGROUND,
+    )
+
+    vc = camera.open_camera(config.CAMERA_ID)
     pb.setActivePatternByName("binary mapping")
-    vc = camera.open_camera(CAMERA_ID)
     print("Starting LED location capture")
-    num_bits = int(num_leds).bit_length()
+    num_bits = int(config.NUM_LEDS).bit_length()
 
     locations = []
     for i in range(num_bits):
-        pixel_array = set_binary_pattern(num_leds, num_bits, i)
+        pixel_array = set_binary_pattern(num_bits, i)
         pb.setActiveVariables({"pixels_to_light": pixel_array})
         time.sleep(0.5)
-        frame = camera.get_frame(vc)
-        current_locations, _, _ = camera.get_all_led_positions(
-            frame, threshold, save_image=True, minimum_dimension=1
+        frame = camera.get_frame(vc, background_image)
+        current_locations, _, _ = camera.get_led_positions(
+            frame,
+            threshold,
+            find_multiple_leds=True,
+            save_image=True,
+            minimum_dimension=1,
+            frame_number=i,
         )
         locations.append(current_locations)
 
     # TODO: Now that we have many arrays of coordinates, we need to reconcile the blobs
     # and locate the pixels based on their inferred id
-    return locations
+    print(locations)
+    print("Binary mapping not yet fully implemented, sorry.")
+
+    return None
 
 
-def map_pixels_binary():
-    pb = Pixelblaze(PIXELBLAZE_IP)
-    num_pixels = pb.getPixelCount()
-    print("Number of pixels to calibrate: ", num_pixels)
-
-    # original_brightness = pb.getBrightnessSlider()
-
-    pb.setActivePatternByName("binary mapping")
-    calibration_array = [1, 0] * (int)(num_pixels / 2)
-    pb.setActiveVariables({"pixels_to_light": calibration_array})
-
-    threshold = camera.launch_calibration_window(
-        CAMERA_ID, pb, find_multiple_pixels=True
+def map_pixels_linearly(pb):
+    threshold, background_image = camera.launch_calibration_window(
+        config.CAMERA_ID, pb, subtract_background=config.SUBTRACT_BACKGROUND
     )
 
-    pixelmap = run_binary_mapping_task(threshold, pb, num_pixels)
-    print(pixelmap)
-
-
-def run_linear_mapping_task(threshold, pb, num_leds):
     locations = []
-
     pb.setActivePatternByName("pixel index")
-    vc = camera.open_camera(CAMERA_ID)
+    vc = camera.open_camera(config.CAMERA_ID)
 
     print("Starting LED location capture")
-    for i in range(num_leds):
+    for i in range(config.NUM_LEDS):
         pb.setActiveVariables({"pixel_to_light": i})
         time.sleep(0.2)
 
-        frame = camera.get_frame(vc)
-        location, _, _ = camera.get_led_position(
-            frame, threshold, save_image=True, minimum_dimension=0
+        frame = camera.get_frame(vc, background_image)
+        location, _, _ = camera.get_led_positions(
+            frame,
+            threshold,
+            find_multiple_leds=False,
+            save_image=True,
+            minimum_dimension=0,
+            frame_number=i,
         )
 
         # print("Found LED at ", location)
@@ -97,20 +124,24 @@ def run_linear_mapping_task(threshold, pb, num_leds):
     return ignore_empty_pixels(locations)
 
 
-def map_pixels_linearly():
-    pb = Pixelblaze(PIXELBLAZE_IP)
-    num_pixels = pb.getPixelCount()
-    print("Number of pixels to calibrate: ", num_pixels)
+def main_program():
+    pb = pixelblaze.Pixelblaze(config.PIXELBLAZE_IP)
+    config.NUM_LEDS = pb.getPixelCount()
+    print("Number of pixels to calibrate: ", config.NUM_LEDS)
 
     original_brightness = pb.getBrightnessSlider()
 
-    print("Blinking calibration pixel")
-    pb.setActivePatternByName("blink pixel")
-    pb.setActiveVariables({"pixel_to_light": 1})
+    pixelmap = None
+    match config.MAPPING_METHOD:
+        case config.MappingMethod.LINEAR:
+            pixelmap = map_pixels_linearly(pb)
+        case config.MappingMethod.BINARY:
+            pixelmap = map_pixels_binary(pb)
 
-    threshold = camera.launch_calibration_window(CAMERA_ID, pb)
+    if pixelmap is None:
+        print("No pixels found")
+        sys.exit()
 
-    pixelmap = run_linear_mapping_task(threshold, pb, num_pixels)
     print("Pixelblaze map coordinates generated: ")
     print(pixelmap)
 
@@ -122,10 +153,10 @@ def map_pixels_linearly():
     pb.setBrightnessSlider(original_brightness)
 
     print("Saving generated data to out/ folder")
-    camera.generate_output_image(CAMERA_ID, pixelmap, "pixelmap")
+    camera.generate_output_image(config.CAMERA_ID, pixelmap, "pixelmap")
     with open("out/pixelmap.json", "w", encoding="utf8") as outfile:
         json.dump(pixelmap, outfile)
 
 
 if __name__ == "__main__":
-    map_pixels_linearly()
+    main_program()
