@@ -111,6 +111,11 @@ def create_threshold(grey_image, threshold):
     return threshold_image
 
 
+def create_erosion(image):
+    element = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
+    return cv.morphologyEx(image, cv.MORPH_OPEN, element)
+
+
 def locate_led_in_image(threshold_image, minimum_dimension=3):
     minimum_dimension = 3
 
@@ -164,6 +169,7 @@ def get_led_positions(
 ):
     gray_image = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     threshold_image = create_threshold(gray_image, threshold)
+    threshold_image = create_erosion(threshold_image)
 
     locations = None
     contour_image = None
