@@ -7,6 +7,7 @@ from functools import partial
 import cv2 as cv
 
 import mapping
+import config
 
 
 def do_nothing(_):
@@ -112,7 +113,8 @@ def create_threshold(grey_image, threshold):
 
 
 def create_erosion(image):
-    element = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
+    erosion_size = config.EROSION_SIZE
+    element = cv.getStructuringElement(cv.MORPH_ELLIPSE, (erosion_size, erosion_size))
     return cv.morphologyEx(image, cv.MORPH_OPEN, element)
 
 

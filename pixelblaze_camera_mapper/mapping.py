@@ -77,7 +77,7 @@ def find_known_leds_in_frame(all_known_leds, leds_in_frame, frame_index):
         # LED center might not be exactly the same, so let's find which known LED is close
         distance_array = distance.cdist([led.coordinate], leds_in_frame, "euclidean")
         closest_pixel_index = distance_array.argmin()
-        if distance_array[0][closest_pixel_index] < 2:
+        if distance_array[0][closest_pixel_index] < config.PIXEL_DETECTION_DISTANCE:
             led.frames_seen[frame_index] = True
         else:
             led.frames_seen[frame_index] = False
